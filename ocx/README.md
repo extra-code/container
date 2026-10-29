@@ -19,7 +19,7 @@ It adds only `ocx/`, `scripts/ocx-package.sh` and the `ocx-*` workflows in `.git
 - `scripts/ocx-package.sh` checks the tag, builds the revision, verifies signatures and creates the archive.
 - `.github/workflows/ocx-package.yml` runs those steps on an `ocx-*` tag and pushes a signed package.
 - `.github/workflows/ocx-claim.yml` claims the package in the OCX index. It runs by hand only.
-- `ocx/describe/README.md` is the catalog description. Its frontmatter carries the title, summary and keywords. There is no logo, because the package is not Apple software.
+- `ocx/describe/README.md` is the catalog description. Its frontmatter carries the title, summary and keywords. `ocx/describe/logo.svg` is the catalog logo, a container mark in Parbake's style. It is not an Apple mark, because the package is not Apple software.
 - `.github/workflows/ocx-describe.yml` publishes that description. It runs on a push to `ocx-package` that touches `ocx/describe/`, or by hand.
 
 The JSON file and `ocx/source-revision` carry no license header by design.

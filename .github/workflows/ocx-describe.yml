@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Christian Semmelmann
 # SPDX-License-Identifier: Apache-2.0
 
-# Publishes the catalog description as the package's __ocx.desc tag. No logo, on purpose: the package
-# is not Apple software, so it carries no Apple mark. The README's frontmatter carries the title,
-# description and keywords.
+# Publishes the catalog description as the package's __ocx.desc tag. The logo is Parbake's own
+# container mark, never an Apple mark: the package is not Apple software. The README's frontmatter
+# carries the title, description and keywords.
 name: OCX describe
 
 on:
@@ -47,4 +47,5 @@ jobs:
         run: |
           ocx package description push \
             --readme ocx/describe/README.md \
+            --logo ocx/describe/logo.svg \
             ghcr.io/extra-code/container
