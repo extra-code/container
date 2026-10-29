@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Christian Semmelmann
+# SPDX-License-Identifier: Apache-2.0
+
+# Publishes the catalog description as the package's __ocx.desc tag. No logo, on purpose: the package
+# is not Apple software, so it carries no Apple mark. The README's frontmatter carries the title,
+# description and keywords.
+name: OCX describe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ocx-package]
+    paths:
+      - ocx/describe/**
+
+permissions: {}
+
+concurrency:
+  group: ocx-describe
+  cancel-in-progress: false
+
+jobs:
+  describe:
+    name: publish the container package description
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ocx-sh/setup-ocx@25fa771f8572572dc64528db89560de68a163a0e # v1.4.0
+        with:
+          version: 0.6.5
+          project: ""
+          cache: false
+
+      - name: Push the description
+        env:
+          OCX_NO_UPDATE_CHECK: 1
+          OCX_AUTH_ghcr_io_TYPE: basic
+          OCX_AUTH_ghcr_io_USER: ${{ github.actor }}
+          OCX_AUTH_ghcr_io_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ocx package description push \
+            --readme ocx/describe/README.md \
+            ghcr.io/extra-code/container

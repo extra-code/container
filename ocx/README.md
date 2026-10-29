@@ -9,8 +9,8 @@ This branch builds the OCX package `ocx.sh/extra-code/container`.
 The package is a temporary patched build of [apple/container](https://github.com/apple/container) for Parbake.
 It goes away once Apple ships the patches in a release.
 
-The branch is one commit on top of `parbake`.
-It adds only `ocx/`, `scripts/ocx-package.sh` and `.github/workflows/ocx-package.yml`.
+The branch is a few commits on top of `parbake`.
+It adds only `ocx/`, `scripts/ocx-package.sh` and the `ocx-*` workflows in `.github/workflows/`.
 
 ## What is here
 
@@ -19,6 +19,8 @@ It adds only `ocx/`, `scripts/ocx-package.sh` and `.github/workflows/ocx-package
 - `scripts/ocx-package.sh` checks the tag, builds the revision, verifies signatures and creates the archive.
 - `.github/workflows/ocx-package.yml` runs those steps on an `ocx-*` tag and pushes a signed package.
 - `.github/workflows/ocx-claim.yml` claims the package in the OCX index. It runs by hand only.
+- `ocx/describe/README.md` is the catalog description. Its frontmatter carries the title, summary and keywords. There is no logo, because the package is not Apple software.
+- `.github/workflows/ocx-describe.yml` publishes that description. It runs on a push to `ocx-package` that touches `ocx/describe/`, or by hand.
 
 The JSON file and `ocx/source-revision` carry no license header by design.
 Neither format has a comment syntax.
@@ -46,17 +48,20 @@ It also moves the rolling tags `X.Y.Z`, `X.Y` and `X`.
 
 ## Announce to the OCX index
 
-Run `ocx-claim.yml` once by hand, after the package is public.
+Publish the description first, then run `ocx-claim.yml` once by hand, after the package is public.
+The claim copies the description into the index entry.
 It never runs on its own.
+This branch is the fork's default branch, because GitHub offers "Run workflow" only for workflows on the default branch.
 
 The publish job pushes with `--tags-file tags.txt` and passes the tags it wrote to the announce job.
 The announce job writes them back to `tags.txt` and announces exactly those tags as ephemeral.
 It never lists the registry, so tags that were not announced yet stay out of the index.
 
-Both workflows need the `OCX_ANNOUNCE_TOKEN` secret and the `OCX_INDEX_FORK` variable in the `release` environment.
+Both workflows need the `OCX_ANNOUNCE_TOKEN` secret of the `release` environment and the repository variable `OCX_INDEX_FORK`.
+The environment admits `ocx-*` tags and the `ocx-package` branch, which the claim runs from.
 The announce job also needs the repository variable `OCX_INDEX_ANNOUNCE` set to `true`.
-Use a fine-grained personal access token with read and pull-request write on `ocx-sh/index` and the owner's index fork.
-A classic token with the `repo` scope is the fallback.
+Use a classic personal access token with only the `public_repo` scope.
+A fine-grained token cannot open a pull request in a public repository its owner does not own.
 
 To retire the package, run `ocx package prune`.
 It deletes only the tags the index marks ephemeral.
