@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Christian Semmelmann
+# SPDX-License-Identifier: Apache-2.0
+
+# Run by hand to announce tags that a publish run did not announce, such as builds published before
+# the package was in the index. The publish workflow announces new builds itself.
+name: OCX announce
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Comma-separated registry tags to announce, such as 1.6.1_01,1.6.1,1.6,1,latest
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  announce:
+    name: announce container tags to the OCX index
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    steps:
+      - uses: ocx-sh/setup-ocx@25fa771f8572572dc64528db89560de68a163a0e # v1.4.0
+        with:
+          version: 0.6.5
+          project: ""
+          cache: false
+
+      # A row keeps the marker it was first announced with, so --ephemeral is set from the start.
+      - name: Announce the tags as ephemeral
+        env:
+          TAGS: ${{ inputs.tags }}
+          OCX_ANNOUNCE_TOKEN: ${{ secrets.OCX_ANNOUNCE_TOKEN }}
+          OCX_INDEX_FORK: ${{ vars.OCX_INDEX_FORK }}
+        run: |
+          printf '%s\n' "$TAGS" | tr ',' '\n' > tags.txt
+          ocx package announce --tags-file tags.txt --ephemeral --fork "$OCX_INDEX_FORK" extra-code/container

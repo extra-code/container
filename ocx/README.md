@@ -19,6 +19,7 @@ It adds only `ocx/`, `scripts/ocx-package.sh` and the `ocx-*` workflows in `.git
 - `scripts/ocx-package.sh` checks the tag, builds the revision, verifies signatures and creates the archive.
 - `.github/workflows/ocx-package.yml` runs those steps on an `ocx-*` tag and pushes a signed package.
 - `.github/workflows/ocx-claim.yml` claims the package in the OCX index. It runs by hand only.
+- `.github/workflows/ocx-announce.yml` announces given tags as ephemeral, for builds a publish run did not announce. It runs by hand only.
 - `ocx/describe/README.md` is the catalog description. Its frontmatter carries the title, summary and keywords. `ocx/describe/logo.svg` is the catalog logo, a container mark in Parbake's style. It is not an Apple mark, because the package is not Apple software.
 - `.github/workflows/ocx-describe.yml` publishes that description. It runs on a push to `ocx-package` that touches `ocx/describe/`, or by hand.
 
@@ -57,9 +58,9 @@ The publish job pushes with `--tags-file tags.txt` and passes the tags it wrote 
 The announce job writes them back to `tags.txt` and announces exactly those tags as ephemeral.
 It never lists the registry, so tags that were not announced yet stay out of the index.
 
-Both workflows need the `OCX_ANNOUNCE_TOKEN` secret of the `release` environment and the repository variable `OCX_INDEX_FORK`.
-The environment admits `ocx-*` tags and the `ocx-package` branch, which the claim runs from.
-The announce job also needs the repository variable `OCX_INDEX_ANNOUNCE` set to `true`.
+The claim, announce and publish workflows need the `OCX_ANNOUNCE_TOKEN` secret of the `release` environment and the repository variable `OCX_INDEX_FORK`.
+The environment admits `ocx-*` tags and the `ocx-package` branch, which the claim and announce workflows run from.
+The publish workflow's announce job also needs the repository variable `OCX_INDEX_ANNOUNCE` set to `true`.
 Use a classic personal access token with only the `public_repo` scope.
 A fine-grained token cannot open a pull request in a public repository its owner does not own.
 
