@@ -31,4 +31,20 @@ public struct ImageDescription: Sendable, Codable {
         self.reference = reference
         self.descriptor = descriptor
     }
+
+    /// The placeholder image of a container whose runtime needs no image.
+    /// Its descriptor is well formed but matches no stored image.
+    public static let none = ImageDescription(
+        reference: noneReference,
+        descriptor: Descriptor(
+            mediaType: "application/vnd.oci.image.index.v1+json",
+            digest: "sha256:" + String(repeating: "0", count: 64),
+            size: 0
+        )
+    )
+
+    private static let noneReference = "<none>"
+
+    /// Whether this is the placeholder image. Keys on the reference, never on the digest.
+    public var isNone: Bool { reference == Self.noneReference }
 }
