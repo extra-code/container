@@ -499,4 +499,41 @@ struct PluginLoaderTest {
         let factory = try MockPluginFactory(tempURL: tempURL, plugins: mockPlugins)
         return (factory, cliBinaryURL, serviceBinaryURL)
     }
+
+    @Test
+    func testConfigurationErrorNamesInvalidConfig() async throws {
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        let pluginURL = tempURL.appendingPathComponent("broken")
+        try FileManager.default.createDirectory(at: pluginURL, withIntermediateDirectories: true)
+        try """
+        abstract = "Broken runtime"
+
+        [runtimeConfig]
+        requiresImage = false
+        """.write(to: pluginURL.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
+        try """
+        abstract = "Fine runtime"
+        """.write(
+            to: { () -> URL in
+                let url = tempURL.appendingPathComponent("fine")
+                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                return url.appendingPathComponent("config.toml")
+            }(), atomically: true, encoding: .utf8)
+
+        let loader = try PluginLoader(
+            appRoot: tempURL,
+            installRoot: URL(filePath: "/usr/local/"),
+            logRoot: nil,
+            pluginDirectories: [tempURL],
+            pluginFactories: [DefaultPluginFactory(logger: Logger(label: "test"))]
+        )
+
+        let failure = try #require(loader.configurationError(name: "broken"))
+        #expect(failure.file.lastPathComponent == "config.toml")
+        #expect(failure.reason.contains("platform is required"))
+        #expect(loader.configurationError(name: "fine") == nil)
+        #expect(loader.configurationError(name: "missing") == nil)
+        #expect(loader.configurationError(name: "../broken") == nil)
+    }
 }

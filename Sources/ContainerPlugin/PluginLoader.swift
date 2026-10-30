@@ -208,6 +208,31 @@ extension PluginLoader {
         return nil
     }
 
+    /// Explains why `findPlugin(name:)` found nothing although a `config.toml` for `name` exists
+    /// in a plugin directory: the file and the decoding error. Returns `nil` when there is no
+    /// such file or it decodes.
+    public func configurationError(name: String) -> (file: URL, reason: String)? {
+        guard !name.isEmpty, !name.contains("/"), name != ".", name != ".." else {
+            return nil
+        }
+        for pluginDirectory in pluginDirectories {
+            let candidates = [
+                pluginDirectory.appendingPathComponent(name).appendingPathComponent("config.toml"),
+                pluginDirectory.appendingPathComponent("\(name).app").appendingPathComponent("Contents/Resources/config.toml"),
+            ]
+            for file in candidates where FileManager.default.fileExists(atPath: file.path) {
+                do {
+                    _ = try PluginConfig(configURL: file)
+                } catch let DecodingError.dataCorrupted(context) {
+                    return (file, context.debugDescription)
+                } catch {
+                    return (file, "\(error)")
+                }
+            }
+        }
+        return nil
+    }
+
     /// Locate the plugin whose executable resolves to `path`, e.g. to let a
     /// running plugin process identify its own `Plugin` (and thus its
     /// `resourceURL`) from `CommandLine.executablePath`.

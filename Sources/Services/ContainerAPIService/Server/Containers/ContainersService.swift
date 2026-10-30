@@ -256,7 +256,7 @@ public actor ContainersService {
     public func getActiveImageReferences() async -> Set<String> {
         await lock.withLock(logMetadata: ["acquirer": "\(#function)"]) { _ in
             var imageRefs = Set<String>()
-            for (_, state) in await self.containers {
+            for (_, state) in await self.containers where !state.snapshot.configuration.image.isNone {
                 imageRefs.insert(state.snapshot.configuration.image.reference)
             }
             return imageRefs
@@ -347,9 +347,9 @@ public actor ContainersService {
                         "id": "\(configuration.id)",
                         "ref": "\(configuration.image.reference)",
                     ])
-                let containerImage = ClientImage(description: configuration.image)
-                let needsSnapshot = requirements.requiresImageSnapshot && options.rootFsOverride == nil
-                let imageFs = try await needsSnapshot ? containerImage.getCreateSnapshot(platform: configuration.platform) : nil
+                // The placeholder image of an image-less runtime has no image store entry.
+                let needsSnapshot = requirements.requiresImageSnapshot && options.rootFsOverride == nil && !configuration.image.isNone
+                let imageFs = try await needsSnapshot ? ClientImage(description: configuration.image).getCreateSnapshot(platform: configuration.platform) : nil
 
                 self.log.debug(
                     "configure runtime",

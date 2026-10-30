@@ -92,19 +92,33 @@ public struct PluginConfig: Sendable, Codable {
         public let requiresInitImage: Bool
         /// The runtime uses the image snapshot as the container root filesystem.
         public let requiresImageSnapshot: Bool
+        /// The runtime needs an image to create a container. When `false`, `platform` is required.
+        public let requiresImage: Bool
+        /// The `os/arch[/variant]` platform of containers this runtime creates without an image.
+        public let platform: String?
 
         public static let `default` = RuntimeConfig()
 
-        public init(requiresKernel: Bool = true, requiresInitImage: Bool = true, requiresImageSnapshot: Bool = true) {
+        public init(
+            requiresKernel: Bool = true,
+            requiresInitImage: Bool = true,
+            requiresImageSnapshot: Bool = true,
+            requiresImage: Bool = true,
+            platform: String? = nil
+        ) {
             self.requiresKernel = requiresKernel
             self.requiresInitImage = requiresInitImage
             self.requiresImageSnapshot = requiresImageSnapshot
+            self.requiresImage = requiresImage
+            self.platform = platform
         }
 
         enum CodingKeys: String, CodingKey {
             case requiresKernel
             case requiresInitImage
             case requiresImageSnapshot
+            case requiresImage
+            case platform
         }
 
         public init(from decoder: Decoder) throws {
@@ -112,6 +126,54 @@ public struct PluginConfig: Sendable, Codable {
             self.requiresKernel = try container.decodeIfPresent(Bool.self, forKey: .requiresKernel) ?? true
             self.requiresInitImage = try container.decodeIfPresent(Bool.self, forKey: .requiresInitImage) ?? true
             self.requiresImageSnapshot = try container.decodeIfPresent(Bool.self, forKey: .requiresImageSnapshot) ?? true
+            self.requiresImage = try container.decodeIfPresent(Bool.self, forKey: .requiresImage) ?? true
+            self.platform = try container.decodeIfPresent(String.self, forKey: .platform)
+            if let message = validate() {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(codingPath: container.codingPath, debugDescription: message))
+            }
+        }
+
+        /// Returns `nil` when the configuration is consistent, otherwise a message describing the problem.
+        public func validate() -> String? {
+            if let platform, RuntimePlatform(platform) == nil {
+                return "platform '\(platform)' must be of the form os/arch or os/arch/variant"
+            }
+            if !requiresImage {
+                if platform == nil {
+                    return "platform is required when requiresImage is false"
+                }
+                if requiresImageSnapshot {
+                    return "requiresImageSnapshot must be false when requiresImage is false"
+                }
+                if requiresKernel {
+                    return "requiresKernel must be false when requiresImage is false"
+                }
+            }
+            return nil
+        }
+    }
+
+    /// A parsed `os/arch[/variant]` platform string.
+    public struct RuntimePlatform: Sendable, Equatable {
+        public let os: String
+        public let architecture: String
+        public let variant: String?
+
+        public init?(_ string: String) {
+            let parts = string.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count == 2 || parts.count == 3 else { return nil }
+            let valid: (String) -> Bool = { part in
+                !part.isEmpty
+                    && part.unicodeScalars.allSatisfy { scalar in
+                        (scalar.value >= 0x61 && scalar.value <= 0x7A) || (scalar.value >= 0x30 && scalar.value <= 0x39)
+                            || scalar == "-" || scalar == "_" || scalar == "."
+                    }
+            }
+            guard parts.allSatisfy(valid) else { return nil }
+            self.os = parts[0]
+            self.architecture = parts[1]
+            self.variant = parts.count == 3 ? parts[2] : nil
         }
     }
 
