@@ -81,37 +81,60 @@ public struct Utility {
         log: Logger
     ) async throws -> (ContainerConfiguration, Kernel?, String?) {
         let scheme = try RequestScheme(registry.scheme)
-        let candidates = try await ClientImage.platforms(reference: image, scheme: scheme, containerSystemConfig: containerSystemConfig)
-        let platform = try management.platform.map(Parser.platform(from:))
-
-        let requestedPlatform = try PlatformResolver.resolve(
-            platform: platform,
-            os: management.os,
-            arch: management.arch,
-            candidates: candidates,
-            reference: image,
-            log: log
-        )
-        let runtimeHandler = management.runtime ?? "\(runtimePrefix)\(requestedPlatform.os)"
-        let requirements = try await self.runtimeRequirements(runtime: runtimeHandler, log: log)
-
-        await progressUpdate([
-            .setDescription("Fetching image"),
-            .setItemsName("blobs"),
-        ])
+        let runtimeConfig = try await self.explicitRuntimeConfig(runtime: management.runtime, log: log)
+        let imageless = self.skipsImage(runtime: management.runtime, config: runtimeConfig)
         let taskManager = ProgressTaskCoordinator()
-        let fetchTask = await taskManager.startTask()
-        let img = try await ClientImage.fetch(
-            reference: image,
-            platform: requestedPlatform,
-            scheme: scheme,
-            containerSystemConfig: containerSystemConfig,
-            progressUpdate: ProgressTaskCoordinator.handler(for: fetchTask, from: progressUpdate),
-            maxConcurrentDownloads: imageFetch.maxConcurrentDownloads
-        )
+        let requestedPlatform: ContainerizationOCI.Platform
+        let runtimeHandler: String
+        let requirements: PluginConfig.RuntimeConfig
+        var img: ClientImage?
+        if imageless, let runtime = management.runtime, let runtimeConfig,
+            let pluginPlatform = runtimeConfig.platform.flatMap(PluginConfig.RuntimePlatform.init)
+        {
+            // The runtime needs no image: nothing is looked up, fetched or unpacked, and the
+            // image argument is never parsed.
+            if let conflict = Parser.platformConflict(
+                runtime: runtime, pluginPlatform: pluginPlatform,
+                platform: management.platform, os: management.os, arch: management.arch)
+            {
+                throw ContainerizationError(.invalidArgument, message: conflict)
+            }
+            requestedPlatform = ContainerizationOCI.Platform(
+                arch: pluginPlatform.architecture, os: pluginPlatform.os, variant: pluginPlatform.variant)
+            runtimeHandler = runtime
+            requirements = runtimeConfig
+        } else {
+            let candidates = try await ClientImage.platforms(reference: image, scheme: scheme, containerSystemConfig: containerSystemConfig)
+            let platform = try management.platform.map(Parser.platform(from:))
+
+            requestedPlatform = try PlatformResolver.resolve(
+                platform: platform,
+                os: management.os,
+                arch: management.arch,
+                candidates: candidates,
+                reference: image,
+                log: log
+            )
+            runtimeHandler = management.runtime ?? "\(runtimePrefix)\(requestedPlatform.os)"
+            requirements = runtimeConfig ?? .default
+
+            await progressUpdate([
+                .setDescription("Fetching image"),
+                .setItemsName("blobs"),
+            ])
+            let fetchTask = await taskManager.startTask()
+            img = try await ClientImage.fetch(
+                reference: image,
+                platform: requestedPlatform,
+                scheme: scheme,
+                containerSystemConfig: containerSystemConfig,
+                progressUpdate: ProgressTaskCoordinator.handler(for: fetchTask, from: progressUpdate),
+                maxConcurrentDownloads: imageFetch.maxConcurrentDownloads
+            )
+        }
 
         // Unpack a fetched image before use
-        if requirements.requiresImageSnapshot {
+        if requirements.requiresImageSnapshot, let img {
             await progressUpdate([
                 .setDescription("Unpacking image"),
                 .setItemsName("entries"),
@@ -161,13 +184,14 @@ public struct Utility {
 
         await taskManager.finish()
 
-        let imageConfig = try await img.config(for: requestedPlatform).config
-        let description = img.description
+        let imageConfig = try await img?.config(for: requestedPlatform).config
+        let description = img?.description ?? .none
         let pc = try Parser.process(
             arguments: arguments,
             processFlags: process,
             managementFlags: management,
-            config: imageConfig
+            config: imageConfig,
+            allowEmptyCommand: imageless
         )
 
         var config = ContainerConfiguration(id: id, image: description, process: pc)
@@ -380,14 +404,32 @@ public struct Utility {
         }
     }
 
-    /// Returns the requirements a runtime plugin declares in its configuration.
-    /// The default runtime and runtimes without a loadable configuration use `RuntimeConfig.default`.
-    private static func runtimeRequirements(runtime: String?, log: Logger) async throws -> PluginConfig.RuntimeConfig {
+    /// Returns the runtime configuration of the plugin named by an explicit `--runtime`, or `nil`
+    /// when none is named or the plugin is not installed. A plugin whose configuration exists but
+    /// is invalid fails here, so that it is never mistaken for an installed one that needs an image.
+    private static func explicitRuntimeConfig(runtime: String?, log: Logger) async throws -> PluginConfig.RuntimeConfig? {
         guard let runtime else {
-            return .default
+            return nil
         }
         let pluginLoader = try await self.createPluginLoader(log: log)
-        return pluginLoader.findPlugin(name: runtime, log: log)?.config.runtimeRequirements ?? .default
+        if let plugin = pluginLoader.findPlugin(name: runtime, log: log) {
+            return plugin.config.runtimeRequirements
+        }
+        if let failure = pluginLoader.configurationError(name: runtime) {
+            throw ContainerizationError(
+                .invalidArgument,
+                message: "runtime plugin \(runtime) has an invalid configuration (\(failure.file.path)): \(failure.reason)")
+        }
+        return nil
+    }
+
+    /// Whether `container create` skips the image: only an explicit runtime whose installed,
+    /// valid plugin configuration declares `requiresImage = false`.
+    static func skipsImage(runtime: String?, config: PluginConfig.RuntimeConfig?) -> Bool {
+        guard runtime != nil, let config else {
+            return false
+        }
+        return !config.requiresImage
     }
 
     private static func getKernel(management: Flags.Management) async throws -> Kernel {
