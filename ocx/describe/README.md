@@ -19,7 +19,9 @@ Tags follow the upstream version plus a two-digit build counter: `1.6.1_01` is t
 Install it together with Parbake, as the [Parbake quickstart](https://github.com/extra-code/parbake/blob/main/docs/quickstart.md) describes:
 
 ```bash
-ocx package install --link ~/.parbake/container ocx.sh/extra-code/container:1.6.1_01
+ocx package install --link ~/.parbake/container ghcr.io/extra-code/container:1.6.1_01
 ```
+
+The install line uses the registry name, because the signature trust policy matches it.
 
 It does not replace a stock `container` install, and only one set of `container` services runs at a time.
