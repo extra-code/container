@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 import ContainerPersistence
+import ContainerPlugin
 import ContainerResource
 import Containerization
 import ContainerizationError
@@ -145,6 +146,42 @@ public struct Parser {
 
     public static func platform(from platform: String) throws -> ContainerizationOCI.Platform {
         try .init(from: platform)
+    }
+
+    /// Returns a message when `--platform`, `--os` or `--arch` contradict the fixed platform of
+    /// a runtime that needs no image, otherwise `nil`. A variant given on one side only passes.
+    public static func platformConflict(
+        runtime: String,
+        pluginPlatform: PluginConfig.RuntimePlatform,
+        platform: String?,
+        os: String?,
+        arch: String?
+    ) -> String? {
+        let prefix = "runtime \(runtime) runs \(pluginPlatform.os)/\(pluginPlatform.architecture);"
+        // Normalizes aliases such as aarch64 -> arm64, as the image platform resolver does.
+        func normalized(_ arch: String) -> String {
+            ContainerizationOCI.Platform(arch: arch, os: pluginPlatform.os).architecture
+        }
+        if let os, os != pluginPlatform.os {
+            return "\(prefix) --os \(os) conflicts"
+        }
+        if let arch, normalized(arch) != normalized(pluginPlatform.architecture) {
+            return "\(prefix) --arch \(arch) conflicts"
+        }
+        if let platform {
+            guard let parsed = try? ContainerizationOCI.Platform(from: platform) else {
+                return "\(prefix) --platform \(platform) conflicts"
+            }
+            if parsed.os != pluginPlatform.os || parsed.architecture != normalized(pluginPlatform.architecture) {
+                return "\(prefix) --platform \(platform) conflicts"
+            }
+            if let flagVariant = platform.split(separator: "/").dropFirst(2).first.map(String.init),
+                let pluginVariant = pluginPlatform.variant, flagVariant != pluginVariant
+            {
+                return "\(prefix) --platform \(platform) conflicts"
+            }
+        }
+        return nil
     }
 
     public static func resources(
@@ -309,7 +346,8 @@ public struct Parser {
         arguments: [String],
         processFlags: Flags.Process,
         managementFlags: Flags.Management,
-        config: ContainerizationOCI.ImageConfig?
+        config: ContainerizationOCI.ImageConfig?,
+        allowEmptyCommand: Bool = false
     ) throws -> ProcessConfiguration {
 
         let imageEnvVars = config?.env ?? []
@@ -346,7 +384,13 @@ public struct Parser {
             return result.count > 0 ? result : nil
         }()
 
-        guard let commandToRun = processArguments, commandToRun.count > 0 else {
+        // A runtime that needs no image gets an empty process when no command is given.
+        let commandToRun: [String]
+        if let processArguments, !processArguments.isEmpty {
+            commandToRun = processArguments
+        } else if allowEmptyCommand {
+            commandToRun = [""]
+        } else {
             throw ContainerizationError(.invalidArgument, message: "command/entrypoint not specified for container process")
         }
 

@@ -1841,4 +1841,77 @@ struct ParserTest {
             return error.description.contains("invalid group") && error.description.contains("must be numeric")
         }
     }
+
+    // MARK: - Empty command for runtimes without an image
+
+    @Test
+    func testProcessEmptyCommandAllowed() throws {
+        let result = try Parser.process(
+            arguments: [],
+            processFlags: try Flags.Process.parse([]),
+            managementFlags: try Flags.Management.parse([]),
+            config: nil,
+            allowEmptyCommand: true
+        )
+
+        #expect(result.executable == "")
+        #expect(result.arguments == [])
+        #expect(result.workingDirectory == "/")
+        #expect(result.user == .id(uid: 0, gid: 0))
+    }
+
+    @Test
+    func testProcessEmptyCommandAllowedKeepsFlags() throws {
+        let result = try Parser.process(
+            arguments: [],
+            processFlags: try Flags.Process.parse(["--cwd", "/work", "--uid", "501", "--gid", "20"]),
+            managementFlags: try Flags.Management.parse([]),
+            config: nil,
+            allowEmptyCommand: true
+        )
+
+        #expect(result.executable == "")
+        #expect(result.workingDirectory == "/work")
+        #expect(result.user == .id(uid: 501, gid: 20))
+    }
+
+    @Test
+    func testProcessEmptyEntrypointFlagAllowed() throws {
+        let result = try Parser.process(
+            arguments: [],
+            processFlags: try Flags.Process.parse([]),
+            managementFlags: try Flags.Management.parse(["--entrypoint", ""]),
+            config: nil,
+            allowEmptyCommand: true
+        )
+
+        #expect(result.executable == "")
+        #expect(result.arguments == [])
+    }
+
+    @Test
+    func testProcessEmptyCommandAllowedStillUsesGivenCommand() throws {
+        let result = try Parser.process(
+            arguments: ["run", "me"],
+            processFlags: try Flags.Process.parse([]),
+            managementFlags: try Flags.Management.parse([]),
+            config: nil,
+            allowEmptyCommand: true
+        )
+
+        #expect(result.executable == "run")
+        #expect(result.arguments == ["me"])
+    }
+
+    @Test
+    func testProcessEmptyCommandRejectedByDefault() throws {
+        #expect(throws: ContainerizationError.self) {
+            try Parser.process(
+                arguments: [],
+                processFlags: try Flags.Process.parse([]),
+                managementFlags: try Flags.Management.parse([]),
+                config: nil
+            )
+        }
+    }
 }
