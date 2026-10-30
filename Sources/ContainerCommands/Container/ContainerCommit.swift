@@ -16,6 +16,7 @@
 
 import ArgumentParser
 import ContainerAPIClient
+import ContainerizationError
 import Foundation
 import SystemPackage
 
@@ -41,8 +42,13 @@ extension Application {
         public func run() async throws {
             let client = ContainerClient()
             let containerSystemConfig = try await ClientHealthCheck.loadContainerSystemConfig()
-            let normalizedReference = try ClientImage.normalizeReference(reference, containerSystemConfig: containerSystemConfig)
             let snapshot = try await client.get(id: id)
+            if snapshot.configuration.image.isNone {
+                let runtime = snapshot.configuration.runtimeHandler
+                throw ContainerizationError(
+                    .unsupported, message: "container \(id) runs on runtime \(runtime) without an image; commit is not supported")
+            }
+            let normalizedReference = try ClientImage.normalizeReference(reference, containerSystemConfig: containerSystemConfig)
             let platform = snapshot.configuration.platform
             let sourceImage = try await ClientImage(description: snapshot.configuration.image).config(for: platform)
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
