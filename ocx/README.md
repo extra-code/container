@@ -28,11 +28,15 @@ Neither format has a comment syntax.
 
 ## Cut a release
 
-1. Set `ocx/source-revision` to the revision Parbake pins.
+1. Merge `origin/parbake` into `ocx-package` when `parbake` moved.
+   The source revision must be an ancestor of the tagged commit.
+2. Set `ocx/source-revision` to the revision Parbake pins.
    It must be on `parbake`.
    The upstream tag `X.Y.Z` must be its highest apple/container tag.
-2. Commit the change on `ocx-package` and push the branch.
-3. Tag that commit `ocx-X.Y.Z_NN` and push the tag.
+3. Commit the change on `ocx-package`.
+   Run `OCX_PACKAGE_BRANCH_REF=HEAD scripts/ocx-package.sh check ocx-X.Y.Z_NN` before you push.
+4. Push the branch.
+5. Tag that commit `ocx-X.Y.Z_NN` and push the tag.
 
 Push the branch before the tag.
 The workflow refuses a tag whose commit is not yet on `ocx-package`.
@@ -46,6 +50,10 @@ It ignores the tags in this fork, because anyone with push access can write them
 
 The workflow publishes `ghcr.io/extra-code/container:X.Y.Z_NN`.
 It also moves the rolling tags `X.Y.Z`, `X.Y` and `X`.
+
+The package carries no `cluster-shim`.
+The upstream build makes it only where container services run, and the build runner has none.
+So `container cluster create --shared-image-store` does not work with this package.
 
 ## Announce to the OCX index
 
