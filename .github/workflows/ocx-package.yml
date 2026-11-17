@@ -64,9 +64,9 @@ jobs:
       - name: Verify the container root
         run: scripts/ocx-package.sh verify .build/root
 
-      - uses: ocx-sh/setup-ocx@25fa771f8572572dc64528db89560de68a163a0e # v1.4.0
+      - uses: ocx-sh/setup-ocx@eaeb6788da6191868a1310cc2bba93233b586369 # v1.4.1
         with:
-          version: 0.6.5
+          version: 0.6.8
           project: ""
           cache: false
 
@@ -149,9 +149,9 @@ jobs:
           echo "METADATA=$metadata" >> "$GITHUB_ENV"
 
       # No repository config and no cache reach the job that holds the write tokens.
-      - uses: ocx-sh/setup-ocx@25fa771f8572572dc64528db89560de68a163a0e # v1.4.0
+      - uses: ocx-sh/setup-ocx@eaeb6788da6191868a1310cc2bba93233b586369 # v1.4.1
         with:
-          version: 0.6.5
+          version: 0.6.8
           project: ""
           cache: false
 
@@ -173,11 +173,12 @@ jobs:
           echo "tags=$(paste -sd, tags.txt)" >> "$GITHUB_OUTPUT"
 
       # Anonymous on purpose: with GITHUB_TOKEN, ghcr.io answers the referrers endpoint with 401
-      # instead of 404, so ocx never falls back to the sha256-<digest> tag. It also checks what users see.
-      # Right after a push the anonymous referrers call also answers 401 and ocx exits 69, so only 69 retries.
+      # instead of 404, so ocx never falls back to the sha256-<digest> tag. The fresh OCX_HOME checks
+      # what a user without local state sees. Exit 69 retries for a registry that is not ready yet.
       - name: Verify the pushed signature
         env:
           VERSION: ${{ needs.build.outputs.tag }}
+          OCX_HOME: ${{ runner.temp }}/ocx-verify
         run: |
           for attempt in $(seq 1 20); do
             rc=0
@@ -208,9 +209,9 @@ jobs:
     environment: release
     permissions: {}
     steps:
-      - uses: ocx-sh/setup-ocx@25fa771f8572572dc64528db89560de68a163a0e # v1.4.0
+      - uses: ocx-sh/setup-ocx@eaeb6788da6191868a1310cc2bba93233b586369 # v1.4.1
         with:
-          version: 0.6.5
+          version: 0.6.8
           project: ""
           cache: false
 
